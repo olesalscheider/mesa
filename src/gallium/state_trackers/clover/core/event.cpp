@@ -28,7 +28,7 @@ using namespace clover;
 _cl_event::_cl_event(clover::context &ctx,
                      std::vector<clover::event *> deps,
                      action action_ok, action action_fail) :
-   ctx(ctx), __status(0), wait_count(1),
+   ctx(ctx), __status(CL_QUEUED), wait_count(1),
    action_ok(action_ok), action_fail(action_fail) {
    for (auto ev : deps)
       ev->chain(this);
@@ -114,6 +114,7 @@ hard_event::trigger() {
          pipe->end_query(pipe, __query_end);
          __ts_submit = screen->get_timestamp(screen);
       }
+      __status = CL_SUBMITTED;
 
       while (!__chain.empty()) {
          __chain.back()->trigger();
@@ -123,20 +124,21 @@ hard_event::trigger() {
 }
 
 cl_int
-hard_event::status() const {
+hard_event::status() {
    pipe_screen *screen = queue()->dev.pipe;
 
-   if (__status < 0)
+   if (__status != CL_SUBMITTED)
       return __status;
 
-   else if (!__fence)
-      return CL_QUEUED;
-
-   else if (!screen->fence_signalled(screen, __fence))
+   else if (__fence && !screen->fence_signalled(screen, __fence))
       return CL_SUBMITTED;
 
-   else
+   else {
+      if (__fence)
+         screen->fence_reference(screen, &__fence, NULL);
+      __status = CL_COMPLETE;
       return CL_COMPLETE;
+   }
 }
 
 cl_command_queue
@@ -150,15 +152,20 @@ hard_event::command() const {
 }
 
 void
-hard_event::wait() const {
+hard_event::wait() {
    pipe_screen *screen = queue()->dev.pipe;
 
    if (status() == CL_QUEUED)
       queue()->flush();
 
+   if (status() == CL_COMPLETE)
+      return;
+
    if (!__fence ||
        !screen->fence_finish(screen, __fence, PIPE_TIMEOUT_INFINITE))
       throw error(CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST);
+   screen->fence_reference(screen, &__fence, NULL);
+   __status = CL_COMPLETE;
 }
 
 cl_ulong
@@ -231,7 +238,7 @@ soft_event::trigger() {
 }
 
 cl_int
-soft_event::status() const {
+soft_event::status() {
    if (__status < 0)
       return __status;
 
@@ -256,7 +263,7 @@ soft_event::command() const {
 }
 
 void
-soft_event::wait() const {
+soft_event::wait() {
    for (auto ev : deps)
       ev->wait();
 

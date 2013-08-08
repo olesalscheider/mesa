@@ -61,10 +61,10 @@ public:
    void abort(cl_int status);
    bool signalled() const;
 
-   virtual cl_int status() const = 0;
+   virtual cl_int status() = 0;
    virtual cl_command_queue queue() const = 0;
    virtual cl_command_type command() const = 0;
-   virtual void wait() const = 0;
+   virtual void wait() = 0;
 
    clover::context &ctx;
 
@@ -101,10 +101,10 @@ namespace clover {
 
       virtual void trigger();
 
-      virtual cl_int status() const;
+      virtual cl_int status();
       virtual cl_command_queue queue() const;
       virtual cl_command_type command() const;
-      virtual void wait() const;
+      virtual void wait();
 
       cl_ulong ts_queued() const;
       cl_ulong ts_submit() const;
@@ -138,10 +138,10 @@ namespace clover {
 
       virtual void trigger();
 
-      virtual cl_int status() const;
+      virtual cl_int status();
       virtual cl_command_queue queue() const;
       virtual cl_command_type command() const;
-      virtual void wait() const;
+      virtual void wait();
    };
 }
 
